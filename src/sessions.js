@@ -182,14 +182,13 @@ const setupSession = async (sessionId) => {
           logger.error({ sessionId, err }, 'Failed to patch WWebJS library')
         })
       })
+      initWebSocketServer(sessionId)
+      initializeEvents(client, sessionId)
       await client.initialize()
     } catch (error) {
       logger.error({ sessionId, err: error }, 'Initialize error')
       throw error
     }
-
-    initWebSocketServer(sessionId)
-    initializeEvents(client, sessionId)
 
     // Save the session to the Map
     sessions.set(sessionId, client)
@@ -230,13 +229,13 @@ const initializeEvents = (client, sessionId) => {
     })
   }
 
-  if (isEventEnabled('authenticated')) {
+  client.on('authenticated', () => {
     client.qr = null
-    client.on('authenticated', () => {
+    if (isEventEnabled('authenticated')) {
       triggerWebhook(sessionWebhook, sessionId, 'authenticated')
       triggerWebSocket(sessionId, 'authenticated')
-    })
-  }
+    }
+  })
 
   if (isEventEnabled('call')) {
     client.on('call', (call) => {
@@ -381,18 +380,8 @@ const initializeEvents = (client, sessionId) => {
   }
 
   client.on('qr', (qr) => {
-    // by default QR code is being updated every 20 seconds
-    if (client.qrClearTimeout) {
-      clearTimeout(client.qrClearTimeout)
-    }
     // inject qr code into session
     client.qr = qr
-    client.qrClearTimeout = setTimeout(() => {
-      if (client.qr) {
-        logger.warn({ sessionId }, 'Removing expired QR code')
-        client.qr = null
-      }
-    }, 30000)
     if (isEventEnabled('qr')) {
       triggerWebhook(sessionWebhook, sessionId, 'qr', { qr })
       triggerWebSocket(sessionId, 'qr', { qr })
